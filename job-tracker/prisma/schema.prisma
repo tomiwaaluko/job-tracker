@@ -12,6 +12,7 @@ datasource db {
     // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
     // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
     url      = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
 }
 
 model Post {
@@ -71,4 +72,15 @@ model VerificationToken {
     expires    DateTime
 
     @@unique([identifier, token])
+}
+
+model JobApplication {
+    id             String    @id @default(cuid())
+    userId         String
+    companyName    String
+    role           String
+    status         String
+    dateApplied    DateTime?
+    updatedAt      DateTime  @updatedAt
+    screenshotUrl  String
 }
