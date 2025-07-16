@@ -34,13 +34,23 @@ declare module "next-auth" {
  */
 export const authConfig = {
   providers: [
-    GoogleProvider({
-      clientId: process.env.AUTH_GOOGLE_ID!,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET!,
-    }),
+    // Only include Google provider if credentials are available
+    ...(env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET
+      ? [
+          GoogleProvider({
+            clientId: env.AUTH_GOOGLE_ID as string,
+            clientSecret: env.AUTH_GOOGLE_SECRET as string,
+          }),
+        ]
+      : []),
     // Only include Discord provider if credentials are available
     ...(env.AUTH_DISCORD_ID && env.AUTH_DISCORD_SECRET
-      ? [DiscordProvider]
+      ? [
+          DiscordProvider({
+            clientId: env.AUTH_DISCORD_ID,
+            clientSecret: env.AUTH_DISCORD_SECRET,
+          }),
+        ]
       : []),
     /**
      * ...add more providers here.
