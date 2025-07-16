@@ -3,10 +3,71 @@
 import { useState } from "react";
 import { supabase } from "~/utils/supabaseClient";
 
+interface ParsedJobData {
+  company: string;
+  role: string;
+  status: string;
+  date: string;
+}
+
+interface ParseScreenshotResponse {
+  content?: string;
+  error?: string;
+}
+
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [url, setUrl] = useState("");
+  const [parsedData, setParsedData] = useState<ParsedJobData | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [formData, setFormData] = useState({
+    company: "",
+    role: "",
+    status: "",
+    date: "",
+  });
+
+  const parseScreenshot = async (
+    imageUrl: string,
+  ): Promise<ParseScreenshotResponse> => {
+    const res = await fetch("/api/parse-screenshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageUrl }),
+    });
+
+    const data = (await res.json()) as ParseScreenshotResponse;
+    console.log("Parsed GPT Output:", data.content);
+    return data;
+  };
+
+  const handleManualParse = async () => {
+    if (!url) return;
+
+    setParsing(true);
+    try {
+      const result = await parseScreenshot(url);
+      if (result.content) {
+        try {
+          const parsedJobData = JSON.parse(result.content) as ParsedJobData;
+          setParsedData(parsedJobData);
+          setFormData({
+            company: parsedJobData.company || "",
+            role: parsedJobData.role || "",
+            status: parsedJobData.status || "",
+            date: parsedJobData.date || "",
+          });
+        } catch (parseError) {
+          console.error("Failed to parse GPT response:", parseError);
+        }
+      }
+    } catch (parseError) {
+      console.error("Failed to parse screenshot:", parseError);
+    } finally {
+      setParsing(false);
+    }
+  };
 
   const handleUpload = async () => {
     if (!file) return;
@@ -24,6 +85,32 @@ export default function UploadPage() {
         .from("screenshots")
         .getPublicUrl(fileName);
       setUrl(publicUrl.publicUrl);
+
+      // Automatically parse the screenshot after upload
+      setParsing(true);
+      try {
+        const result = await parseScreenshot(publicUrl.publicUrl);
+        if (result.content) {
+          // Try to parse the JSON from the GPT response
+          try {
+            const parsedJobData = JSON.parse(result.content) as ParsedJobData;
+            setParsedData(parsedJobData);
+            // Auto-fill the form with parsed data
+            setFormData({
+              company: parsedJobData.company || "",
+              role: parsedJobData.role || "",
+              status: parsedJobData.status || "",
+              date: parsedJobData.date || "",
+            });
+          } catch (parseError) {
+            console.error("Failed to parse GPT response:", parseError);
+          }
+        }
+      } catch (parseError) {
+        console.error("Failed to parse screenshot:", parseError);
+      } finally {
+        setParsing(false);
+      }
     }
 
     setUploading(false);
@@ -44,14 +131,28 @@ export default function UploadPage() {
             <input
               type="text"
               placeholder="Company Name"
+              value={formData.company}
+              onChange={(e) =>
+                setFormData({ ...formData, company: e.target.value })
+              }
               className="rounded-md px-4 py-2 text-black"
             />
             <input
               type="text"
               placeholder="Role"
+              value={formData.role}
+              onChange={(e) =>
+                setFormData({ ...formData, role: e.target.value })
+              }
               className="rounded-md px-4 py-2 text-black"
             />
-            <select className="rounded-md px-4 py-2 text-black">
+            <select
+              value={formData.status}
+              onChange={(e) =>
+                setFormData({ ...formData, status: e.target.value })
+              }
+              className="rounded-md px-4 py-2 text-black"
+            >
               <option value="">Select Status</option>
               <option value="applied">Applied</option>
               <option value="interview">Interview</option>
@@ -61,13 +162,30 @@ export default function UploadPage() {
             <input
               type="date"
               placeholder="Date Applied"
+              value={formData.date}
+              onChange={(e) =>
+                setFormData({ ...formData, date: e.target.value })
+              }
               className="rounded-md px-4 py-2 text-black"
             />
             <input
               type="url"
               placeholder="Screenshot URL"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
               className="rounded-md px-4 py-2 text-black"
             />
+
+            {url && !parsedData && (
+              <button
+                type="button"
+                onClick={handleManualParse}
+                disabled={parsing}
+                className="rounded-md bg-green-600 px-4 py-2 font-semibold hover:bg-green-700 disabled:opacity-50"
+              >
+                {parsing ? "Parsing..." : "Parse Screenshot with AI"}
+              </button>
+            )}
 
             {/* File Upload Section */}
             <div className="flex flex-col gap-2">
@@ -91,12 +209,24 @@ export default function UploadPage() {
                 </button>
               )}
               {url && (
-                <p className="text-sm text-green-400">
-                  Uploaded!{" "}
-                  <a href={url} target="_blank" className="underline">
-                    View
-                  </a>
-                </p>
+                <div className="text-sm">
+                  <p className="text-green-400">
+                    Uploaded!{" "}
+                    <a href={url} target="_blank" className="underline">
+                      View
+                    </a>
+                  </p>
+                  {parsing && (
+                    <p className="text-yellow-400">
+                      Parsing screenshot with AI...
+                    </p>
+                  )}
+                  {parsedData && (
+                    <p className="text-green-400">
+                      ✓ Job details extracted and auto-filled!
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
