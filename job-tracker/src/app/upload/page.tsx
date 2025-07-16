@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { supabase } from "~/utils/supabaseClient";
 
 interface ParsedJobData {
@@ -16,6 +17,7 @@ interface ParseScreenshotResponse {
 }
 
 export default function UploadPage() {
+  const { status } = useSession();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [url, setUrl] = useState("");
@@ -55,7 +57,7 @@ export default function UploadPage() {
           setFormData({
             company: parsedJobData.company || "",
             role: parsedJobData.role || "",
-            status: parsedJobData.status || "",
+            status: parsedJobData.status?.toLowerCase() ?? "",
             date: parsedJobData.date || "",
           });
         } catch (parseError) {
@@ -99,7 +101,7 @@ export default function UploadPage() {
             setFormData({
               company: parsedJobData.company || "",
               role: parsedJobData.role || "",
-              status: parsedJobData.status || "",
+              status: parsedJobData.status?.toLowerCase() ?? "",
               date: parsedJobData.date || "",
             });
           } catch (parseError) {
@@ -115,6 +117,37 @@ export default function UploadPage() {
 
     setUploading(false);
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const res = await fetch("/api/job/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...formData,
+        screenshotUrl: url,
+      }),
+    });
+
+    const result = (await res.json()) as { error?: string };
+
+    if (res.ok) {
+      alert("Job application saved!");
+      // Optionally redirect or reset form
+    } else {
+      alert("Failed to save application: " + (result.error ?? "Unknown error"));
+    }
+  };
+
+  if (status === "loading") {
+    return <div>Loading...</div>;
+  }
+
+  if (status === "unauthenticated") {
+    return <div>Please sign in to upload job applications.</div>;
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
       <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
@@ -127,7 +160,10 @@ export default function UploadPage() {
             Upload screenshots of your job applications to track your progress.
           </p>
 
-          <form className="flex w-full max-w-md flex-col gap-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex w-full max-w-md flex-col gap-4"
+          >
             <input
               type="text"
               placeholder="Company Name"
