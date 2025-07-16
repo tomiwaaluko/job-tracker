@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import { supabase } from "~/utils/supabaseClient";
 
 interface ParsedJobData {
@@ -28,6 +28,12 @@ export default function UploadPage() {
     role: "",
     status: "",
     date: "",
+  });
+  const [errors, setErrors] = useState({
+    company: false,
+    role: false,
+    status: false,
+    date: false,
   });
 
   const parseScreenshot = async (
@@ -121,6 +127,46 @@ export default function UploadPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const { company, role, status, date } = formData;
+
+    // Reset errors
+    setErrors({
+      company: false,
+      role: false,
+      status: false,
+      date: false,
+    });
+
+    // Simple validation checks
+    const newErrors = {
+      company: !company,
+      role: !role,
+      status: !status,
+      date: date ? isNaN(new Date(date).getTime()) : false,
+    };
+
+    if (newErrors.company || newErrors.role || newErrors.status || !url) {
+      setErrors(newErrors);
+      alert("Please fill in all required fields and upload a screenshot.");
+      return;
+    }
+
+    if (
+      !["applied", "interview", "offer", "rejected"].includes(
+        status.toLowerCase(),
+      )
+    ) {
+      setErrors({ ...newErrors, status: true });
+      alert("Please select a valid status.");
+      return;
+    }
+
+    // Optional: validate date format if provided
+    if (newErrors.date) {
+      alert("Please provide a valid date.");
+      return;
+    }
+
     const res = await fetch("/api/job/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -134,18 +180,48 @@ export default function UploadPage() {
 
     if (res.ok) {
       alert("Job application saved!");
-      // Optionally redirect or reset form
+      // Reset form after successful submission
+      setFormData({
+        company: "",
+        role: "",
+        status: "",
+        date: "",
+      });
+      setUrl("");
+      setParsedData(null);
+      setFile(null);
     } else {
       alert("Failed to save application: " + (result.error ?? "Unknown error"));
     }
   };
 
   if (status === "loading") {
-    return <div>Loading...</div>;
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
+        <div className="text-xl">Loading...</div>
+      </main>
+    );
   }
 
   if (status === "unauthenticated") {
-    return <div>Please sign in to upload job applications.</div>;
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
+        <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
+          <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
+            Upload <span className="text-[hsl(280,100%,70%)]">Screenshot</span>
+          </h1>
+          <p className="max-w-md text-center text-xl">
+            Please sign in to upload job applications.
+          </p>
+          <button
+            onClick={() => signIn()}
+            className="rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
+          >
+            Sign In
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -171,7 +247,10 @@ export default function UploadPage() {
               onChange={(e) =>
                 setFormData({ ...formData, company: e.target.value })
               }
-              className="rounded-md px-4 py-2 text-black"
+              className={`rounded-md px-4 py-2 text-black ${
+                errors.company ? "border-2 border-red-500" : ""
+              }`}
+              required
             />
             <input
               type="text"
@@ -180,14 +259,20 @@ export default function UploadPage() {
               onChange={(e) =>
                 setFormData({ ...formData, role: e.target.value })
               }
-              className="rounded-md px-4 py-2 text-black"
+              className={`rounded-md px-4 py-2 text-black ${
+                errors.role ? "border-2 border-red-500" : ""
+              }`}
+              required
             />
             <select
               value={formData.status}
               onChange={(e) =>
                 setFormData({ ...formData, status: e.target.value })
               }
-              className="rounded-md px-4 py-2 text-black"
+              className={`rounded-md px-4 py-2 text-black ${
+                errors.status ? "border-2 border-red-500" : ""
+              }`}
+              required
             >
               <option value="">Select Status</option>
               <option value="applied">Applied</option>
@@ -202,7 +287,9 @@ export default function UploadPage() {
               onChange={(e) =>
                 setFormData({ ...formData, date: e.target.value })
               }
-              className="rounded-md px-4 py-2 text-black"
+              className={`rounded-md px-4 py-2 text-black ${
+                errors.date ? "border-2 border-red-500" : ""
+              }`}
             />
             <input
               type="url"
@@ -268,7 +355,14 @@ export default function UploadPage() {
 
             <button
               type="submit"
-              className="rounded-md bg-[hsl(280,100%,70%)] px-4 py-2 font-semibold hover:bg-[hsl(280,100%,60%)]"
+              disabled={
+                !formData.company ||
+                !formData.role ||
+                !formData.status ||
+                uploading ||
+                parsing
+              }
+              className="rounded-md bg-[hsl(280,100%,70%)] px-4 py-2 font-semibold hover:bg-[hsl(280,100%,60%)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Upload Application
             </button>
